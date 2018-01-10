@@ -3,7 +3,7 @@
 **Team: Phillip Ly, Resham Rajendra Jhangiani, Anoop Jeerige, Eizat Mushtaq, Tong Zhou, Matt Corrente**
 **Professor: Lidia Morrison**
 
-CPSC 587 Computer Vision and Deep Learning - Fall 2017m- California State University Fullerton
+CPSC 587 Computer Vision and Deep Learning - Fall 2017 - California State University Fullerton
 
 Link to PPT slides: https://goo.gl/BKr2zL
 
