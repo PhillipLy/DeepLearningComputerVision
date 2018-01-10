@@ -3,8 +3,13 @@ import base64
 import sys
 import tempfile
 import cv2
+import time
+import argparse
+import datetime
+import numpy as np
+import os
 
-MODEL_BASE = '/home/anoop/models/research'
+MODEL_BASE = '/opt/models/research'
 sys.path.append(MODEL_BASE)
 sys.path.append(MODEL_BASE + '/object_detection')
 sys.path.append(MODEL_BASE + '/slim')
@@ -22,17 +27,19 @@ from PIL import Image
 from PIL import ImageDraw
 import tensorflow as tf
 from utils import label_map_util
-from utils import visualization_utils as vis_util
+import visualization_utils as vis_util
 from werkzeug.datastructures import CombinedMultiDict
 from wtforms import Form
 from wtforms import ValidationError
 from cv2 import imencode
+from app_utils import draw_boxes_and_labels
+from threading import Thread
 app = Flask(__name__)
 
 
 
 
-PATH_TO_CKPT = '/home/anoop/tensorflow/ssd_inception_v2_coco_11_06_2017/frozen_inference_graph.pb'
+PATH_TO_CKPT = '/opt/graph_def/faster_rcnn_resnet101_coco_11_06_2017/faster_rcnn_resnet101_coco_11_06_2017/frozen_inference_graph.pb'
 PATH_TO_LABELS = MODEL_BASE + '/object_detection/data/mscoco_label_map.pbtxt'
 
 content_types = {'jpg': 'image/jpeg',
@@ -41,6 +48,43 @@ content_types = {'jpg': 'image/jpeg',
 extensions = sorted(content_types.keys())
 
 # Helper Functions
+
+# the following two variables are used to manage how often labels will be re-spoken
+cache_frame_count = 0
+simple_label_cache = []
+
+def increment_cache_frame_count():
+  global cache_frame_count
+  cache_frame_count += 1
+
+def reset_label_cache_and_frame_count():
+  global cache_frame_count
+  global simple_label_cache
+  cache_frame_count = 0
+  simple_label_cache = []
+
+def read_label(label_to_speak):
+    temp = 'espeak ' + '"'+ label_to_speak+'"'
+    print (temp)
+    os.system(temp)
+
+def read_if_not_on_simple_label_cache(label):
+  global cache_frame_count
+  global simple_label_cache
+  # print (cache_frame_count)
+  if cache_frame_count >= 20:
+    cache_frame_count = 0
+    simple_label_cache = []
+  if label not in simple_label_cache:
+    t = Thread(target=read_label, args=(label,))
+    t.start()
+    simple_label_cache.append(label)
+
+def speak_labels(labels):
+  increment_cache_frame_count()
+  for label in labels:
+    read_if_not_on_simple_label_cache(label)
+
 def is_image():
   def _is_image(form, field):
     if not field.data:
@@ -153,8 +197,6 @@ def detect_objects(image_path):
 
   return result
 
-
-
 @app.route('/')
 def main_display():
     photo_form = PhotoForm(request.form)
@@ -167,7 +209,7 @@ def imgproc():
   video_form = VideoForm(request.form)
   form = PhotoForm(CombinedMultiDict((request.files, request.form)))
   if request.method == 'POST' and form.validate():
-    with tempfile.NamedTemporaryFile() as temp:
+    with tempfile.NamedTemporaryFile(delete=False) as temp:
       form.input_photo.data.save(temp)
       temp.flush()
       print(temp.name)
@@ -201,43 +243,117 @@ def vidpros():
     classes = graph.get_tensor_by_name('detection_classes:0')
     num_detections = graph.get_tensor_by_name('num_detections:0')
 
-
     vid_source = cv2.VideoCapture(session['vid'])
+    vid_source.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
+    vid_source.set(cv2.CAP_PROP_FRAME_HEIGHT, 600)
     print("vid src")
     def generate(image_tensor, boxes, scores, classes, num_detections):
         ret, frame = vid_source.read()
+        # Peformance fix
+        process_this_frame = True
         # tensor code
+        while ret:
 
+            if process_this_frame:
 
+                #image_np = client._load_image_into_numpy_array(frame)
+                image_np_expanded = np.expand_dims(frame, axis=0)
 
-        print(ret)
-        while(ret):
-            #image_np = client._load_image_into_numpy_array(frame)
-            image_np_expanded = np.expand_dims(frame, axis=0)
+                (boxes_t, scores_t, classes_t, num_detections_t) = client.sess.run(
+                    [boxes, scores, classes, num_detections],
+                    feed_dict={image_tensor: image_np_expanded})
 
-            (boxes_t, scores_t, classes_t, num_detections_t) = client.sess.run(
-                [boxes, scores, classes, num_detections],
-                feed_dict={image_tensor: image_np_expanded})
+                image, labels = vis_util.visualize_boxes_and_labels_on_image_array(
+                frame,
+                np.squeeze(boxes_t),
+                np.squeeze(classes_t).astype(np.int32),
+                np.squeeze(scores_t),
+                client.category_index,
+                use_normalized_coordinates=True,
+                line_thickness=8)
+                # print(labels)
+                speak_labels(labels)
+                #image_pil = Image.fromarray(np.uint8(frame)).convert('RGB')
 
-            vis_util.visualize_boxes_and_labels_on_image_array(
-            frame,
-            np.squeeze(boxes_t),
-            np.squeeze(classes_t).astype(np.int32),
-            np.squeeze(scores_t),
-            client.category_index,
-            use_normalized_coordinates=True,
-            line_thickness=8)
-
-            #image_pil = Image.fromarray(np.uint8(frame)).convert('RGB')
-
-            payload = cv2.imencode('.jpg', frame)[1].tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + payload + b'\r\n')
+                payload = cv2.imencode('.jpg', frame)[1].tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + payload + b'\r\n')
+            process_this_frame = not process_this_frame
             ret, frame = vid_source.read()
 
     print("Before return")
+
     return Response(generate(image_tensor, boxes, scores, classes, num_detections), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
+@app.route('/realproc', methods=['GET', 'POST'])
+def realproc():
+    return render_template('realtime.html')
+
+@app.route('/realstop', methods=['GET', 'POST'])
+def realstop():
+    photo_form = PhotoForm(request.form)
+    video_form = VideoForm(request.form)
+    if request.method == 'POST':
+        print("In - Stop - POST")
+        if request.form['realstop'] == 'Stop Web Cam':
+            print(request.form['realstop'])
+            #fps_init.stop()
+            #video_init.stop()
+            #video_init.update()
+            print("Stopped")
+            reset_label_cache_and_frame_count()
+    return render_template('main.html', photo_form=photo_form, video_form=video_form)
+
+@app.route('/realpros')
+def realpros():
+    graph = client.detection_graph
+    image_tensor = graph.get_tensor_by_name('image_tensor:0')
+    boxes = graph.get_tensor_by_name('detection_boxes:0')
+    scores = graph.get_tensor_by_name('detection_scores:0')
+    classes = graph.get_tensor_by_name('detection_classes:0')
+    num_detections = graph.get_tensor_by_name('num_detections:0')
+
+    vid_source = cv2.VideoCapture(0)
+    vid_source.set(cv2.CAP_PROP_FRAME_WIDTH, 800)
+    vid_source.set(cv2.CAP_PROP_FRAME_WIDTH, 600)
+    print("vid src")
+    def generate(image_tensor, boxes, scores, classes, num_detections):
+        ret, frame = vid_source.read()
+        # Peformance fix
+        process_this_frame = True
+        # tensor code
+        while ret:
+
+            if process_this_frame:
+
+                #image_np = client._load_image_into_numpy_array(frame)
+                image_np_expanded = np.expand_dims(frame, axis=0)
+
+                (boxes_t, scores_t, classes_t, num_detections_t) = client.sess.run(
+                    [boxes, scores, classes, num_detections],
+                    feed_dict={image_tensor: image_np_expanded})
+
+                image, labels = vis_util.visualize_boxes_and_labels_on_image_array(
+                frame,
+                np.squeeze(boxes_t),
+                np.squeeze(classes_t).astype(np.int32),
+                np.squeeze(scores_t),
+                client.category_index,
+                use_normalized_coordinates=True,
+                line_thickness=8)
+                # print(labels)
+                speak_labels(labels)
+                #image_pil = Image.fromarray(np.uint8(frame)).convert('RGB')
+
+                payload = cv2.imencode('.jpg', frame)[1].tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + payload + b'\r\n')
+            process_this_frame = not process_this_frame
+            ret, frame = vid_source.read()
+
+    print("Before return")
+    return Response(generate(image_tensor, boxes, scores, classes, num_detections), mimetype='multipart/x-mixed-replace; boundary=frame')    
 
 client = ObjectDetector()
 

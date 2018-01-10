@@ -1,35 +1,21 @@
-# TensorFlow Object Detection API Website
+# Recognition and Classification Systems with Deep Learning and Computer Vision Techniques
 
-## Products
-- [TensorFlow][3]
-- [Google Compute Engine][4]
+**Team: Phillip Ly, Resham Rajendra Jhangiani, Anoop Jeerige, Eizat Mushtaq, Tong Zhou, Matt Corrente**
+**Professor: Lidia Morrison**
+**CPSC 587 Computer Vision and Deep Learning**
+**Fall 2017**
+**California State University Fullerton**
+
+Link to PPT slides: https://goo.gl/BKr2zL
 
 ## Language
-- [Python][5]
+- Python 3.5.2
 
 ## Prerequisites
-1. A Google Cloud Platform Account
-2. [A new Google Cloud Platform Project][6] for this lab with billing enabled
-
-[6]: https://console.developers.google.com/project
-
-## Do this first
-First you launch a GCE instance with the following configuration.
-
-- vCPU x 8
-- Memory 8GB
-- Debian GNU/Linux 9 (stretch) as a guest OS
-- Allow HTTP traffic
-- Assign a static IP address
-
-You can leave other settings as default. Once the instance has started,
- log in to the guest OS using SSH and change the OS user to root.
-
-```
-$ sudo -i
-```
-
-All remaining operations should be done from the root user.
+1. TensorFlow 1.3
+2. TensorFlow Object Detection API
+3. OpenCV 3.2
+4. Flask 0.12.2
 
 ## Install packages
 
@@ -37,7 +23,6 @@ All remaining operations should be done from the root user.
 # apt-get update
 # apt-get install -y protobuf-compiler python-pil python-lxml python-pip python-dev git
 # pip install Flask==0.12.2 WTForms==2.1 Flask_WTF==0.14.2 Werkzeug==0.12.2
-# pip install --upgrade https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow-1.1.0-cp27-none-linux_x86_64.whl
 ```
 
 ## Install the Object Detection API library
@@ -68,83 +53,35 @@ All remaining operations should be done from the root user.
 # ln -sf /opt/graph_def/faster_rcnn_resnet101_coco_11_06_2017/frozen_inference_graph.pb /opt/graph_def/frozen_inference_graph.pb
 ```
 
-## Install the demo application
+## Running the application
 
 ```
-# cd $HOME
-# git clone https://github.com/GoogleCloudPlatform/tensorflow-object-detection-example
-# cp -a tensorflow-object-detection-example/object_detection_app /opt/
-# cp /opt/object_detection_app/object-detection.service /etc/systemd/system/
+# cd ~/realtimeCV/obj_detect_multi
+# export FLASK_APP=detector.app
+# flask run
 ```
-
-This application provides a simple user authentication mechanism.
- You can change the username and password by modifying the following
- part in `/opt/object_detection_app/decorator.py`.
-
-```
-USERNAME = 'username'
-PASSWORD = 'passw0rd'
-```
-
-## Launch the demo application
-
-```
-# systemctl daemon-reload
-# systemctl enable object-detection
-# systemctl start object-detection
-# systemctl status object-detection
-```
-
-The last command outputs the application status, as in the
- following example:
-```
-● object-detection.service - Object Detection API Demo
-   Loaded: loaded (/opt/object_detection_app/object-detection.service; linked)
-   Active: active (running) since Mon 2017-06-19 07:31:48 UTC; 24s ago
- Main PID: 551 (app.py)
-   CGroup: /system.slice/object-detection.service
-           └─551 /usr/bin/python /opt/object_detection_app/app.py
-
-Jun 19 07:31:48 object-detection-2 systemd[1]: Started Object Detection API Demo.
-Jun 19 07:32:13 object-detection-2 app.py[551]: 2017-06-19 07:32:13.456353: W tensorflow/core/platform/cpu_f...ons.
-Jun 19 07:32:13 object-detection-2 app.py[551]: 2017-06-19 07:32:13.456427: W tensorflow/core/platform/cpu_f...ons.
-Jun 19 07:32:13 object-detection-2 app.py[551]: 2017-06-19 07:32:13.456438: W tensorflow/core/platform/cpu_f...ons.
-Jun 19 07:32:13 object-detection-2 app.py[551]: 2017-06-19 07:32:13.456444: W tensorflow/core/platform/cpu_f...ons.
-Jun 19 07:32:13 object-detection-2 app.py[551]: 2017-06-19 07:32:13.456449: W tensorflow/core/platform/cpu_f...ons.
-Jun 19 07:32:13 object-detection-2 app.py[551]: * Running on http://0.0.0.0:80/ (Press CTRL+C to quit)
-Hint: Some lines were ellipsized, use -l to show in full.
-```
-
 You have to wait around 60secs for the application to finish loading
- the pretrained model graph. You'll see the message 
- `Running on http://0.0.0.0:80/ (Press CTRL+C to quit)` when it's ready.
+ the pretrained model graph. You'll see the message
+ `Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)` when it's ready.
 
-Now you can access the instance's static IP address using a web browser.
+Now you can access the instance's IP address using a web browser.
  When you upload an image file with a `jpeg`, `jpg`, or `png` extension,
  the application shows the result of the object detection inference.
- The inference may take up to 30 seconds, depending on the image.
+ The inference may take up to 10 seconds, depending on the image.
 
-The following example shows "cup" in the image. You can also check
- other objects such as fork, dining table, person and knife by clicking
- labels shown to the right of the image.
+You can check the objects by clicking labels shown to the right of the image.
 
- ![](docs/img/screenshot.png)
-
-(Image from http://www.ashinari.com/en/)
+You can upload an video file (preferably small < 5MB, .mp4, 3gp),
+ for the object detection inference. The Real-time detection take the web cam
+ as the source for the object detection.
 
 ## How to use different models
 There are five pretrained models that can be used by the application.
  They have diffrent characteristics in terms of accuracy and speed.
- You can change the model used by the application with the following
- commands.
+ You can change the model used by the application by setting
+ the PATH_TO_CKPT to point the frozen weights of the required model.
 
-```
-# systemctl stop object-detection
-# ln -sf /opt/graph_def/[MODEL NAME]/frozen_inference_graph.pb /opt/graph_def/frozen_inference_graph.pb
-# systemctl start object-detection
-```
-
-You specify one of the following models in `[MODEL NAME]`.
+You specify one of the following models.
 
 - ssd_mobilenet_v1_coco_11_06_2017
 - ssd_inception_v2_coco_11_06_2017
@@ -152,3 +89,6 @@ You specify one of the following models in `[MODEL NAME]`.
 - faster_rcnn_resnet101_coco_11_06_2017
 - faster_rcnn_inception_resnet_v2_atrous_coco_11_06_2017
 
+## References
+- https://github.com/GoogleCloudPlatform/tensorflow-object-detection-example
+- https://github.com/datitran/object_detector_app
