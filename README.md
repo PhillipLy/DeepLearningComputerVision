@@ -1,6 +1,7 @@
 # Recognition and Classification System with Deep Learning and Computer Vision Techniques
 
 **Team: Phillip Ly, Resham Rajendra Jhangiani, Anoop Jeerige, Eizat Mushtaq, Tong Zhou, Matt Corrente**
+
 **Professor: Lidia Morrison**
 
 CPSC 587 Computer Vision and Deep Learning - Fall 2017 - California State University Fullerton
